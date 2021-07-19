@@ -127,7 +127,8 @@ binary_sensor:
              - script.execute: push_8sec_large_coffee
              - if:
                  condition:
-                   lambda: "return (id(water_count_var).state > $coffee_max);"
+                    lambda: |-
+                        return id(water_count_var).state > $coffee_max;
                  then:
                    script.execute: push_large_coffee
           else:
