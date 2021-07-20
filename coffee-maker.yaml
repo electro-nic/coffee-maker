@@ -1,6 +1,6 @@
 substitutions:
   device_name: coffee-maker
-  coffee_max: "30.00000" 
+  coffee_max: '30.0'
   
 esphome:
   name: ${device_name}
@@ -61,13 +61,15 @@ sensor:
     pin: GPIO03
     id: my_flow_meter
     name: "Water_Counter${device_name}"
-    update_interval: 1s
+    update_interval: 2s
+    accuracy_decimals: 0
     
   - platform: integration
     id: water_count_var
     name: "Total Cofee Water"
     sensor: my_flow_meter
     time_unit: min
+    accuracy_decimals: 0
     
   - platform: ntc
     sensor: resistance_sensor_boiler
@@ -128,7 +130,8 @@ binary_sensor:
              - if:
                  condition:
                     lambda: |-
-                        return id(water_count_var).state > $coffee_max;
+                        ESP_LOGI("water", "water_count_var = %f", id(water_count_var).state);
+                        return (id(water_count_var).state > ${coffee_max});
                  then:
                    script.execute: push_large_coffee
           else:
