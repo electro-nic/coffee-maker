@@ -61,15 +61,19 @@ sensor:
     pin: GPIO03
     id: my_flow_meter
     name: "Water_Counter${device_name}"
-    update_interval: 2s
-    accuracy_decimals: 0
+    update_interval: 1s
+    on_value:
+      lambda: |-
+        ESP_LOGI("counter", "counter value = %f", x);
     
   - platform: integration
     id: water_count_var
     name: "Total Cofee Water"
     sensor: my_flow_meter
     time_unit: min
-    accuracy_decimals: 0
+    on_value:
+         lambda: |-
+            ESP_LOGI("integration", "integration value = %f", x);
     
   - platform: ntc
     sensor: resistance_sensor_boiler
@@ -120,20 +124,23 @@ binary_sensor:
       delayed_off: 1000ms
     on_press:
       then:
+      - sensor.integration.reset:  water_count_var
       - if:
           condition:
             binary_sensor.is_off: lewel_water
           then:
              - logger.log: "There is water in the tank, lets turn on the coffee machine and grinding process!"
-             - sensor.integration.reset:  water_count_var
+             
              - script.execute: push_8sec_large_coffee
              - if:
-                 condition:
+                condition:
                     lambda: |-
                         ESP_LOGI("water", "water_count_var = %f", id(water_count_var).state);
                         return (id(water_count_var).state > ${coffee_max});
-                 then:
-                   script.execute: push_large_coffee
+                then:
+
+            
+                      - script.execute: push_large_coffee
           else:
             - logger.log: "Error, no water in the tank, will not star the coffee machine"  
 script:
