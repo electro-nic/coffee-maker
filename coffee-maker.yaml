@@ -1,6 +1,6 @@
 substitutions:
   device_name: coffee-maker
-  coffee_max: '30.0'
+  coffee_max: '30.000000'
   
 esphome:
   name: ${device_name}
@@ -62,6 +62,7 @@ sensor:
     id: my_flow_meter
     name: "Water_Counter${device_name}"
     update_interval: 3s
+    accuracy_decimals: 1
     on_value:
       lambda: |-
         ESP_LOGI("counter", "counter value = %f", x);
@@ -71,6 +72,7 @@ sensor:
     name: "Total Cofee Water"
     sensor: my_flow_meter
     time_unit: min
+    accuracy_decimals: 1
     on_value:
          lambda: |-
             ESP_LOGI("integration", "integration value = %f", x);
@@ -123,21 +125,8 @@ binary_sensor:
     filters:
       delayed_off: 1000ms
     on_press:
-      then:
-        - lambda: |-
-            id(water_count_var) = 0;
-            if (id(lewel_water).state) {
-              # // воды нет
-              ESP_LOGI("water","Error, no water in the tank, will not star the coffee machine" );
-            } else {
-              # //вода есть
-              ESP_LOGI("water","There is water in the tank, lets turn on the coffee machine and grinding process!");
-              id(push_8sec_large_coffee).execute();
-              ESP_LOGI("water", "water_count_var = %f", id(water_count_var).state);
-              if (id(water_count_var).state > ${coffee_max} ) {
-                id(push_large_coffee).execute(); 
-              }
-            }
+      - script.execute: make_big_coffee
+      
 script:
   - id: state_no_water
     then:
@@ -151,6 +140,7 @@ script:
         - switch.turn_on: cmlarge
         - delay: 8s
         - switch.turn_off: cmlarge
+
         
   - id: push_large_coffee
     then:
@@ -158,6 +148,33 @@ script:
         - switch.turn_on: cmlarge
         - delay: 1s
         - switch.turn_off: cmlarge
+        
+        
+  - id: make_big_coffee
+    then:
+      - sensor.integration.reset:  water_count_var
+      - if:
+           condition:
+            binary_sensor.is_off: lewel_water
+           then:
+              - script.execute: push_8sec_large_coffee
+              # - if:
+              #       condition:
+              #               sensor.in_range: 
+              #               id: water_count_var
+              #               above: 10.0
+              #       then:
+              #               script.execute: push_large_coffee
+                    
+              - if:
+                  condition:
+                    sensor.in_range:
+                      id: water_count_var
+                      above: $coffee_max
+                  then:
+                      script.execute: push_large_coffee
+           else:
+                - logger.log: "Error, no water in the tank, will not star the coffee machine"  
   - id: led_red_on_soft
     then:
       light.turn_on:
@@ -180,3 +197,16 @@ output:
     pin:
       number: GPIO15
       mode: OUTPUT
+      
+time:
+  - platform: sntp
+    on_time:
+      # Every 2 sec
+      - seconds: /2
+        minutes: 0
+        then:
+          - if:
+              condition:
+                binary_sensor.is_off: lewel_water
+              then:
+               script.stop: make_big_coffee
