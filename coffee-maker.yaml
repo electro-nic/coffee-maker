@@ -1,6 +1,6 @@
 substitutions:
   device_name: coffee-maker
-  coffee_max: '10.0'
+  coffee_max: '30.0'
   
 esphome:
   name: ${device_name}
@@ -127,10 +127,10 @@ binary_sensor:
         - lambda: |-
             id(water_count_var) = 0;
             if (id(lewel_water).state) {
-              // воды нет
+              # // воды нет
               ESP_LOGI("water","Error, no water in the tank, will not star the coffee machine" );
             } else {
-              //вода есть
+              # //вода есть
               ESP_LOGI("water","There is water in the tank, lets turn on the coffee machine and grinding process!");
               id(push_8sec_large_coffee).execute();
               ESP_LOGI("water", "water_count_var = %f", id(water_count_var).state);
