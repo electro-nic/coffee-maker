@@ -1,6 +1,6 @@
 substitutions:
   device_name: coffee-maker
-  coffee_max: '30.000000'
+  coffee_max: '60'
   
 esphome:
   name: ${device_name}
@@ -74,8 +74,13 @@ sensor:
     time_unit: min
     accuracy_decimals: 1
     on_value:
-         lambda: |-
-            ESP_LOGI("integration", "integration value = %f", x);
+        lambda: |-
+            if(x) // x не равно нулю, - значит счетчик считает
+            id(water_count_var).state += x;
+            if(id(water_count_var).state >= id(${coffee_max})){
+              ESP_LOGI("integration", "integration value = %f", id(water_count_var));
+              id(push_large_coffee).execute();
+            }
     
   - platform: ntc
     sensor: resistance_sensor_boiler
@@ -148,7 +153,8 @@ script:
         - switch.turn_on: cmlarge
         - delay: 1s
         - switch.turn_off: cmlarge
-        
+        - delay: 10ms
+        - sensor.integration.reset:  water_count_var
         
   - id: make_big_coffee
     then:
@@ -158,21 +164,21 @@ script:
             binary_sensor.is_off: lewel_water
            then:
               - script.execute: push_8sec_large_coffee
-              # - if:
-              #       condition:
-              #               sensor.in_range: 
-              #               id: water_count_var
-              #               above: 10.0
-              #       then:
-              #               script.execute: push_large_coffee
+#               # - if:
+#               #       condition:
+#               #               sensor.in_range: 
+#               #               id: water_count_var
+#               #               above: 10.0
+#               #       then:
+#               #               script.execute: push_large_coffee
                     
-              - if:
-                  condition:
-                    sensor.in_range:
-                      id: water_count_var
-                      above: $coffee_max
-                  then:
-                      script.execute: push_large_coffee
+#               - while:
+#                   condition:
+#                     lambda: return id(water_count_var).state >= $coffee_max;
+# # lambda: return id($temp_id).state < $high_temp;
+
+#                   then:
+#                       script.execute: push_large_coffee
            else:
                 - logger.log: "Error, no water in the tank, will not star the coffee machine"  
   - id: led_red_on_soft
