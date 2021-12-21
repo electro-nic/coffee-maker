@@ -1,6 +1,6 @@
 substitutions:
   device_name: coffee-maker
-  coffee_max: '60'
+  coffee_max: '300001'
   
 esphome:
   name: ${device_name}
@@ -29,9 +29,16 @@ captive_portal:
 web_server:
   port: 80
 # Relay outputs, exposed as switches in Home Assistant
+
+globals:
+  - id: water_count_var
+    type: float
+    restore_value: no
+    initial_value: '100000.0'
+    
 switch:
   - platform: gpio
-    pin: GPIO16
+    pin: GPIO13
     name: "On"
     id: cmonoff
   - platform: gpio
@@ -42,6 +49,13 @@ switch:
     pin: GPIO12
     name: "Water"
     id: cmwater
+  - platform: template
+    name: "POWER"
+    turn_on_action:
+      - switch.turn_on: cmonoff
+      - delay: 200ms
+      - switch.turn_off: cmonoff
+      
 
     
     
@@ -57,37 +71,38 @@ sensor:
   - platform: uptime # Время работы после последней перезагрузки
     name: "uptime_${device_name}"
     
-  - platform: pulse_counter #Сенсор "количества" воды пройденного через таблетку
+  - platform: pulse_counter
     pin: GPIO03
     id: my_flow_meter
-    name: "Water_Counter${device_name}"
-    update_interval: 3s
-    accuracy_decimals: 1
+#    name: "Water_Counter${device_name}" # лучше убрать, чтобы не гадил часто в эфир и потом какое дело до него HA
+    update_interval: 3s # можно и меньше если уберёшь name:
+    accuracy_decimals: 6
+    filters:
+      - lambda: return x/20; # для интервала 3 сек
     on_value:
       lambda: |-
-        ESP_LOGI("counter", "counter value = %f", x);
+                if(x){ // x не равно нулю, - значит счетчик считает
+                id(water_count_var) += x;
+                ESP_LOGI("integration", "integration value = %f", id(water_count_var));
+                if(id(water_count_var) >= ${coffee_max})
+                      id(led_red_on_soft).execute();
+
+                  }
+  #                     id(push_large_coffee).execute();   
+  # - platform: integration
+  #   id: water_count_var
+  #   name: "Total Cofee Water"
+  #   sensor: my_flow_meter
+  #   time_unit: min
+  #   accuracy_decimals: 1
     
-  - platform: integration
-    id: water_count_var
-    name: "Total Cofee Water"
-    sensor: my_flow_meter
-    time_unit: min
-    accuracy_decimals: 1
-    on_value:
-        lambda: |-
-            if(x) // x не равно нулю, - значит счетчик считает
-            id(water_count_var).state += x;
-            if(id(water_count_var).state >= id(${coffee_max})){
-              ESP_LOGI("integration", "integration value = %f", id(water_count_var));
-              id(push_large_coffee).execute();
-            }
     
   - platform: ntc
     sensor: resistance_sensor_boiler
     calibration:
-      b_constant: 3950
+      b_constant: 4485
       reference_temperature: 25°C
-      reference_resistance: 100kOhm
+      reference_resistance: 68kOhm
     name: NTC Temperature Sensor
 
   # Coffee boiler temperature sensors:
@@ -112,12 +127,13 @@ binary_sensor:
     pin:
       number: GPIO01
       mode: INPUT_PULLUP
-      inverted: True
+      #inverted: True
     filters:
-      delayed_off: 1000ms
+      delayed_off: 2000ms
     on_press:
       then:
-        script.execute: state_no_water
+        - script.execute: state_no_water
+        - logger.log: "water , gerkon open  "  
         
 ##### Button Maker Coffee #####
   - platform: gpio
@@ -126,11 +142,17 @@ binary_sensor:
     pin:
       number: GPIO00
       mode: INPUT_PULLUP
-      inverted: True
+#      inverted: True
     filters:
-      delayed_off: 1000ms
+      delayed_on: 2000ms
     on_press:
-      - script.execute: make_big_coffee
+      lambda: |-
+              if( id(lewel_water).state == true){
+                  
+                  id(water_count_var) = 0.0;
+                id(push_8sec_large_coffee).execute();
+              }
+      # - script.execute: make_big_coffee
       
 script:
   - id: state_no_water
@@ -154,11 +176,11 @@ script:
         - delay: 1s
         - switch.turn_off: cmlarge
         - delay: 10ms
-        - sensor.integration.reset:  water_count_var
+        # - sensor.integration.reset:  water_count_var
         
   - id: make_big_coffee
     then:
-      - sensor.integration.reset:  water_count_var
+      # - sensor.integration.reset:  water_count_var
       - if:
            condition:
             binary_sensor.is_off: lewel_water
@@ -174,8 +196,7 @@ script:
                     
 #               - while:
 #                   condition:
-#                     lambda: return id(water_count_var).state >= $coffee_max;
-# # lambda: return id($temp_id).state < $high_temp;
+
 
 #                   then:
 #                       script.execute: push_large_coffee
@@ -192,7 +213,6 @@ light:
   - platform: monochromatic
     id: red_led
     name: "Red led"
-    internal: true
     restore_mode: ALWAYS_OFF
     output: led_red
     
@@ -200,9 +220,10 @@ output:
   # Red LED
   - platform: esp8266_pwm
     id: led_red
-    pin:
-      number: GPIO15
-      mode: OUTPUT
+    frequency: 1000 Hz
+    pin: GPIO15
+#      number: GPIO15
+#      mode: OUTPUT
       
 time:
   - platform: sntp
@@ -215,4 +236,6 @@ time:
               condition:
                 binary_sensor.is_off: lewel_water
               then:
-               script.stop: make_big_coffee
+               - script.stop: make_big_coffee
+               - logger.log: "Error, stop make coffee "  
+               
