@@ -39,11 +39,11 @@ globals:
 switch:
   - platform: gpio
     pin: GPIO13
-    name: "On"
+    #name: POWER
     id: cmonoff
   - platform: gpio
     pin: GPIO14
-    name: "Large Coffee"
+    #name: "Large Coffee"
     id: cmlarge
   - platform: gpio
     pin: GPIO12
